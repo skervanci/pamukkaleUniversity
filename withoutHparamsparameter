@@ -1,0 +1,49 @@
+
+#LSTM kodun en son hali Sibel cizimlerin bulundugu
+import numpy as np,pandas as pd
+from keras.models import Sequential
+from keras.layers import LSTM, Dense, Dropout
+import datetime
+import tensorflow as tf
+from matplotlib import pyplot
+import math
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import MinMaxScaler
+df = pd.read_csv('2015-2022bitcoinprice.csv',sep=';',parse_dates=['date'],index_col=0)
+scaler = MinMaxScaler()
+df["ScaledPrice"] = scaler.fit_transform(df[["price"]])
+df['Prediction'] = df['ScaledPrice'].shift(-1)
+df=df[:-1]
+X = np.array(df['ScaledPrice'])
+y = np.array(df['Prediction'])
+X_train, x_test, y_train, y_test=  train_test_split(X, y, test_size=0.2,shuffle=False)
+X_train = np.reshape(X_train, (X_train.shape[0],1))
+X_test = np.reshape(x_test, (x_test.shape[0], 1)) 
+reshape_3 = lambda x: x.reshape((x.shape[0], x.shape[1], 1))
+
+log_dir = "logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=2)
+NUM_EPOCHS=10
+BATCH_SIZE=64   
+model=Sequential()
+
+model.add(LSTM(64,input_shape=(1, 1),go_backwards=False,activation='tanh'))  
+model.add(Dropout(0.2))
+model.add(Dense(1))
+model.compile(loss="mean_squared_error",optimizer="Adam",metrics=["mean_squared_error"])
+
+for i in range (NUM_EPOCHS):
+    model.fit(X_train,y_train,batch_size=BATCH_SIZE,epochs=100,shuffle=True,verbose=2, callbacks=[tensorboard_callback])
+train_score,_=model.evaluate(X_train,y_train,batch_size=BATCH_SIZE,verbose=2)
+train_rmse=math.sqrt(train_score)
+score,_=model.evaluate(X_test, y_test,batch_size=BATCH_SIZE,verbose=2)
+rmse=math.sqrt(score)
+print("\n Train MSE: {:6f}, Train RMSE: {:.6f}".format(train_score,train_rmse))
+print("\n Test MSE: {:6f}, Test RMSE: {:.6f}".format(score,rmse))
+
+yhat = model.predict(X_test)
+pyplot.plot(yhat, label='predict')
+pyplot.plot(y_test, label='true')
+
+pyplot.legend()
+pyplot.show()
